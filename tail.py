@@ -47,33 +47,33 @@ def trim_string(s: str, limit: int, dotdotdot='…') -> str:
 with HiddenCursor():  # hide the cursor
     try:
         fn = sys.argv[1]
-        with open(fn) as log:
-            counter = 0
-            while True:
-                counter += 1
+        counter = 0
+        ouy = []
+        while True:
+            counter += 1
+            with open(fn) as log:
                 lines = log.readlines()
                 out = lines[-LINES:]
-                line_start_no = len(lines) - len(out) + 1
-                # read the file and take as many of the lines as
-                # possible
-                # draw the lines of the screen one line at a time
-                # make sure each line is wide enough to cover over
-                # any previous line that was drawn
-                # sleep for requested amount then repeat from the top
-                size = os.get_terminal_size(sys.__stdout__.fileno())
-                for idx, line in enumerate(out):
-                    line_no = str(line_start_no + idx).rjust(len(str(len(lines))))
-                    line = Fore.LIGHTMAGENTA_EX + f'{line_no} ' + Fore.LIGHTCYAN_EX + line.strip()
-                    # trim the line to fit the screen
-                    if len(line) >= size.columns:
-                        print(trim_string(line, size.columns))
-                    else:
-                        # draw the line and pad with space to draw across the whole row
-                        print(line.ljust(size.columns))
-                print(Fore.BLUE + f'UPDATE #{counter}')
-                time.sleep(NEXT_UPDATE)
-                log.seek(0, 0)  # begin from the beginning
-                cursor_up(len(out) + 1)  # push the cursor back up to the top to overwrite what's already there
+            line_start_no = len(lines) - len(out) + 1
+            # read the file and take as many of the lines as
+            # possible
+            # draw the lines of the screen one line at a time
+            # make sure each line is wide enough to cover over
+            # any previous line that was drawn
+            # sleep for requested amount then repeat from the top
+            size = os.get_terminal_size(sys.__stdout__.fileno())
+            for idx, line in enumerate(out):
+                line_no = str(line_start_no + idx).rjust(len(str(len(lines))))
+                line = Fore.LIGHTMAGENTA_EX + f'{line_no} ' + Fore.LIGHTCYAN_EX + line.strip()
+                # trim the line to fit the screen
+                if len(line) >= size.columns:
+                    print(trim_string(line, size.columns))
+                else:
+                    # draw the line and pad with space to draw across the whole row
+                    print(line.ljust(size.columns))
+            print(Fore.BLUE + f'UPDATE #{counter}')
+            time.sleep(NEXT_UPDATE)
+            cursor_up(len(out) + 1)  # push the cursor back up to the top to overwrite what's already there
 
     except KeyboardInterrupt:
         pass
