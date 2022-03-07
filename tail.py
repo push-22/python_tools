@@ -48,9 +48,9 @@ with HiddenCursor():  # hide the cursor
     try:
         fn = sys.argv[1]
         counter = 0
-        ouy = []
         while True:
             counter += 1
+            out = []
             with open(fn) as log:
                 lines = log.readlines()
                 out = lines[-LINES:]
