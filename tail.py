@@ -16,8 +16,8 @@ def cursor_down(n):
 
 
 colorama.init()
-NEXT_UPDATE = int(next((a[2:] for a in sys.argv if (a.startswith('/T') or a.startswith('-T')) and len(a) >= 3), 10))
-LINES = int(next((a[2:] for a in sys.argv if (a.startswith('/L') or a.startswith('-L')) and len(a) >= 3), 5))
+NEXT_UPDATE = int(next((a[2:] for a in sys.argv if (a.startswith('/T') or a.startswith('-T')) and len(a) >= 3), 5))
+LINES = int(next((a[2:] for a in sys.argv if (a.startswith('/L') or a.startswith('-L')) and len(a) >= 3), 15))
 HELP = bool(next((a for a in sys.argv if a == '/?' or a == '-?'), False))
 if HELP:
     fn, _ = os.path.splitext(__file__)
@@ -32,15 +32,15 @@ if len(sys.argv) == 1:
     print('need a file to tail')
     sys.exit(1)
 
-if not os.path.isfile(sys.argv[1]):
-    print(f'can\'t find {sys.argv[1]}')
-    sys.exit(2)
+# if not os.path.isfile(sys.argv[1]):
+#     print(f'can\'t find {sys.argv[1]}')
+#     sys.exit(2)
 
 
 def trim_string(s: str, limit: int, dotdotdot='…') -> str:
     s = s.strip()
     if len(s) > limit:
-        return s[:limit].strip() + dotdotdot
+        return s[:(limit - len(dotdotdot))].strip() + dotdotdot
     return s
 
 
@@ -50,30 +50,38 @@ with HiddenCursor():  # hide the cursor
         counter = 0
         while True:
             counter += 1
-            out = []
-            with open(fn) as log:
-                lines = log.readlines()
-                out = lines[-LINES:]
-            line_start_no = len(lines) - len(out) + 1
-            # read the file and take as many of the lines as
-            # possible
+            # read the file and take as many of the lines as possible
             # draw the lines of the screen one line at a time
             # make sure each line is wide enough to cover over
             # any previous line that was drawn
             # sleep for requested amount then repeat from the top
-            size = os.get_terminal_size(sys.__stdout__.fileno())
-            for idx, line in enumerate(out):
-                line_no = str(line_start_no + idx).rjust(len(str(len(lines))))
-                line = Fore.LIGHTMAGENTA_EX + f'{line_no} ' + Fore.LIGHTCYAN_EX + line.strip()
-                # trim the line to fit the screen
-                if len(line) >= size.columns:
-                    print(trim_string(line, size.columns))
-                else:
-                    # draw the line and pad with space to draw across the whole row
-                    print(line.ljust(size.columns))
-            print(Fore.BLUE + f'UPDATE #{counter}')
-            time.sleep(NEXT_UPDATE)
-            cursor_up(len(out) + 1)  # push the cursor back up to the top to overwrite what's already there
+            if os.path.isfile(fn):
+                with open(fn) as log:
+                    lines = log.readlines()
+                    out = lines[-LINES:]
+                line_start_no = len(lines) - len(out) + 1
+                size = os.get_terminal_size(sys.__stdout__.fileno())
+                # if there aren't the requested number of lines to show
+                # fill out the empty lines with blanks and display those
+                if len(out) != LINES:
+                    for idx in range(0, LINES - len(out)):
+                        out.append("".ljust(size.columns + 2))
+                for idx, line in enumerate(out):
+                    line_no = str(line_start_no + idx).rjust(len(str(len(lines))))
+                    line = Fore.LIGHTMAGENTA_EX + f'{line_no} ' + Fore.LIGHTCYAN_EX + line.strip()
+                    # trim the line to fit the screen
+                    if len(line) >= size.columns:
+                        print(trim_string(line, size.columns))
+                    else:
+                        # draw the line and pad with space to draw across the whole row
+                        print(line.ljust(size.columns + 2))
+                print(Fore.YELLOW + f'UPDATE #{counter}, CTRL+C to quit')
+                time.sleep(NEXT_UPDATE)
+                cursor_up(len(out) + 1)  # push the cursor back up to the top to overwrite what's already there
+            else:
+                print(Fore.YELLOW + f'UPDATE #{counter}, CTRL+C to quit')
+                time.sleep(NEXT_UPDATE)
+                cursor_up(1)  # push the cursor back up to the top to overwrite what's already there
 
     except KeyboardInterrupt:
         pass
