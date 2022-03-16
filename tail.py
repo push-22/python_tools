@@ -18,14 +18,16 @@ def cursor_down(n):
 colorama.init()
 NEXT_UPDATE = int(next((a[2:] for a in sys.argv if (a.startswith('/T') or a.startswith('-T')) and len(a) >= 3), 5))
 LINES = int(next((a[2:] for a in sys.argv if (a.startswith('/L') or a.startswith('-L')) and len(a) >= 3), 15))
+NO_LINE_NOS = bool(next((a for a in sys.argv if a == '/NL' or a == '-NL'), False))
 HELP = bool(next((a for a in sys.argv if a == '/?' or a == '-?'), False))
 if HELP:
     fn, _ = os.path.splitext(__file__)
     _, fn = os.path.split(fn)
     print(f'usage: {Fore.LIGHTYELLOW_EX + fn + Fore.RESET} filename [/T/L/?]')
-    print(f'{Fore.LIGHTWHITE_EX}/T {Fore.YELLOW}time between updates')
-    print(f'{Fore.LIGHTWHITE_EX}/L {Fore.YELLOW}number of lines to tail')
-    print(f'{Fore.LIGHTWHITE_EX}/? {Fore.YELLOW}show this message')
+    print(f'{Fore.LIGHTWHITE_EX}/T  {Fore.YELLOW}time between updates')
+    print(f'{Fore.LIGHTWHITE_EX}/L  {Fore.YELLOW}number of lines to tail')
+    print(f"{Fore.LIGHTWHITE_EX}/NL {Fore.YELLOW}don't display line numbers")
+    print(f'{Fore.LIGHTWHITE_EX}/?  {Fore.YELLOW}show this message')
     sys.exit(0)
 
 if len(sys.argv) == 1:
@@ -38,50 +40,85 @@ if len(sys.argv) == 1:
 
 
 def trim_string(s: str, limit: int, dotdotdot='…') -> str:
-    s = s.strip()
-    if len(s) > limit:
-        return s[:(limit - len(dotdotdot))].strip() + dotdotdot
+    # s = Fore.LIGHTBLACK_EX + ("D" * limit)
+    s = s[:limit - len(dotdotdot)] + dotdotdot if len(s) > limit else s
     return s
 
+
+# if the output has been redirected elsewhere then
+# DON'T DISPLAY LINE NUMBER
+# DON'T DO ANYTHING THAT WILL BREAK THE APP (os.get_terminal_size)
+# DON'T BOTHER TO DO THE TAIL CONTINUOUSLY
+has_been_redirected = not os.isatty(sys.__stdout__.fileno())
+if has_been_redirected:
+    NO_LINE_NOS = True
 
 with HiddenCursor():  # hide the cursor
     try:
         fn = sys.argv[1]
         counter = 0
+
+        # read the file, if there's no file display ?s
+        # else display what lines the file has in it
+        # always display the asked for amount of lines even if blank
         while True:
             counter += 1
-            # read the file and take as many of the lines as possible
-            # draw the lines of the screen one line at a time
-            # make sure each line is wide enough to cover over
-            # any previous line that was drawn
-            # sleep for requested amount then repeat from the top
+
+            if has_been_redirected:
+                num_columns = 200
+            else:
+                tsize = os.get_terminal_size(sys.__stdout__.fileno())
+                num_columns = tsize.columns
+
+            # output if the file doesn't exist
+            out = []
+            line_no_len = len(str(LINES)) + 1
+            for idx in range(0, LINES):
+                out.append("?" * (num_columns - line_no_len))
+            got_file_data = False
+
+            # merge the file contents into the output
             if os.path.isfile(fn):
                 with open(fn) as log:
                     lines = log.readlines()
-                    out = lines[-LINES:]
-                line_start_no = len(lines) - len(out) + 1
-                size = os.get_terminal_size(sys.__stdout__.fileno())
-                # if there aren't the requested number of lines to show
-                # fill out the empty lines with blanks and display those
-                if len(out) != LINES:
-                    for idx in range(0, LINES - len(out)):
-                        out.append("".ljust(size.columns + 2))
-                for idx, line in enumerate(out):
-                    line_no = str(line_start_no + idx).rjust(len(str(len(lines))))
-                    line = Fore.LIGHTMAGENTA_EX + f'{line_no} ' + Fore.LIGHTCYAN_EX + line.strip()
-                    # trim the line to fit the screen
-                    if len(line) >= size.columns:
-                        print(trim_string(line, size.columns))
-                    else:
-                        # draw the line and pad with space to draw across the whole row
-                        print(line.ljust(size.columns + 2))
-                print(Fore.YELLOW + f'UPDATE #{counter}, CTRL+C to quit')
-                time.sleep(NEXT_UPDATE)
-                cursor_up(len(out) + 1)  # push the cursor back up to the top to overwrite what's already there
+                    if len(lines):
+                        got_file_data = True
+                        lines = lines[-LINES:]
+                        start = len(out) - len(lines)
+                        lidx = 0
+                        for idx, line in enumerate(range(0, LINES)):
+                            if idx < start:
+                                out[idx] = (" " * (num_columns - line_no_len))
+                            else:
+                                out[idx] = lines[lidx].strip()
+                                lidx += 1
+
+            # now print the lines to the screen
+            if not has_been_redirected:
+                line_clr = Fore.LIGHTBLACK_EX if not got_file_data else Fore.LIGHTCYAN_EX
+                line_no_clr = Fore.LIGHTMAGENTA_EX
             else:
-                print(Fore.YELLOW + f'UPDATE #{counter}, CTRL+C to quit')
-                time.sleep(NEXT_UPDATE)
-                cursor_up(1)  # push the cursor back up to the top to overwrite what's already there
+                line_clr = ''
+                line_no_clr = ''
+                if not got_file_data:
+                    sys.exit(0)
+
+            for idx, line in enumerate(out, 1):
+                if NO_LINE_NOS:
+                    line = line_clr + line if has_been_redirected else line.ljust(num_columns)
+                else:
+                    line_no = str(idx).rjust(len(str(len(out))))
+                    # print the line and using ljust, make sure the line fills the
+                    # screen - getting rid of the need to clear the background first
+                    line = line_no_clr + f'{line_no} ' + line_clr + line
+                    line = line.ljust(num_columns + 10)
+                print(trim_string(line, num_columns + 10))
+
+            if has_been_redirected:
+                sys.exit(0)
+            print(Fore.YELLOW + f'UPDATE #{counter}, CTRL+C to quit')
+            time.sleep(NEXT_UPDATE)
+            cursor_up(len(out) + 1)  # push the cursor back up to the top to overwrite what's already there
 
     except KeyboardInterrupt:
         pass
